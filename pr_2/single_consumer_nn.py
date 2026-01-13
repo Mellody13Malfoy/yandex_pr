@@ -66,7 +66,7 @@ class SingleMessageConsumer:
             logger.info(f"ID: {data.get('id')}")
 
             # Случайная ошибка для теста
-            message_number = data.get('message_number')
+            message_number = data.get('id')
             if message_number % 15 == 0 and message_number is not None:
                raise Exception(f"Simulated error for message {data.get('message_number')}")
 
