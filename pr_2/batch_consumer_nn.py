@@ -66,7 +66,7 @@ class BatchMessageConsumer:
                 logger.debug(f"   [{i}/{len(messages)}] Processing: {data.get('id', 'unknown')}")
 
                 # Случайная ошибка для теста
-                if data.get('message_number', 0) % 20 == 0:
+                if data.get(id) % 20 == 0:
                     raise Exception(f"Batch error for message {data.get('message_number')}")
 
                 success_count += 1
@@ -115,7 +115,7 @@ class BatchMessageConsumer:
                     continue
 
                 batch_count += 1
-                logger.info(f"🔨 Batch #{batch_count}: collected {len(batch)} messages")
+                logger.info(f"Batch #{batch_count}: collected {len(batch)} messages")
 
                 # Обработка батча
                 success, errors = self.process_batch(batch)
