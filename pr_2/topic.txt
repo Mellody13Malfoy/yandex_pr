@@ -1,0 +1,8 @@
+топик создается в файле docker compose
+kafka-topics --bootstrap-server kafka1:9092 --list
+__consumer_offsets
+my-replicated-topic
+kafka-topics.sh --describe --topic my-replicated-topic --bootstrap-server localhost:9092
+Topic: my-replicated-topic Partitiun: 0 Leader:2 Replicas:2,1 Isr:2,1
+Topic: my-replicated-topic Partitiun: 1 Leader:1 Replicas:1,2 Isr:1,2
+Topic: my-replicated-topic Partitiun: 2 Leader:2 Replicas:2,1 Isr:2,1
