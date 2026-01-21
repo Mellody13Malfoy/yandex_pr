@@ -1,0 +1,146 @@
+version: "3.5"
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    ports:
+      - "2190:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - nifi-network-kaftest
+
+  kafka1:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9192:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+    networks:
+      - nifi-network-kaftest
+      
+  kafka2:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9193:9092"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+      - kafka1
+    networks:
+      - nifi-network-kaftest
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    hostname: kafka-ui
+    ports:
+      - "8888:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:9092,kafka2:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    depends_on:
+      - kafka1
+      - kafka2
+    networks:
+      - nifi-network-kaftest
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-init
+    depends_on:
+      - kafka1  
+      - kafka2  
+    command: >
+      bash -c "
+      echo ' Ожидаем запуск Kafka...' &&
+      sleep 30 &&
+      kafka-topics ----bootstrap-server kafka1:9092 --delete --topic 'test-user_blocks-changelog' --if-exists || true &&
+      echo ' Создаем топик my-replicated-topic...' &&
+      kafka-topics --bootstrap-server kafka1:9092 --create --topic my-replicated-topic --partitions 3 --replication-factor 2 &&
+      echo ' Топик создан!'
+      "
+    restart: on-failure:3
+    networks:
+      - nifi-network-kaftest
+  
+# НОВЫЙ СЕРВИС: Faust Worker для фильтрации сообщений
+  faust-worker:
+    image: python:3.9-slim  
+    container_name: faust-worker
+    restart: 'no'
+    stdin_open: true
+    tty: true
+    ports:
+      - "6066:6066"
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - /home/mes-admin/kafka-producer/pr2/app.py:/app/app.py
+      - faust_data:/data
+    working_dir: /app
+    command: >
+      bash -c "
+        echo '1 - Устанавливаем Faust'
+        pip install faust
+        echo '2 - Запускаем Faust'
+        python app.py worker -l info --web-port 6066
+      "
+    networks:
+      - nifi-network-kaftest
+
+  # Опционально: Сервис для отправки тестовых сообщений
+  test-producer:
+    image: python:3.9-slim 
+    container_name: test-producer
+    depends_on:
+      - kafka1
+      - faust-worker
+    networks:
+      - nifi-network-kaftest
+    restart: 'no'
+    volumes:
+      - /home/mes-admin/kafka-producer/pr2/producer.py:/app/producer.py
+    # Команда для отправки тестовых данных
+    command: >
+      bash -c "
+        pip install faust kafka-python &&
+        python /app/producer.py
+      "
+  test-cosumer:
+    image: python:3.9-slim 
+    container_name: test-cosumer
+    depends_on:
+      - test-producer
+    networks:
+      - nifi-network-kaftest
+    restart: 'no'
+    volumes:
+      - /home/mes-admin/kafka-producer/pr2/consumer.py:/app/consumer.py
+    # Команда для отправки тестовых данных
+    command: >
+      bash -c "
+        pip install faust kafka-python &&
+        python /app/consumer.py
+      "
+
+volumes:
+  python-code:
+  pip-cache:
+  faust_data:  # Для персистентных данных Faust
+  faust_logs:  # Для логов Faust
+
+networks:
+  nifi-network-kaftest:
+    driver: bridge
