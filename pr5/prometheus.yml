@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 15s      # Как часто собирать метрики
+  evaluation_interval: 15s   # Как часто оценивать правила
+  scrape_timeout: 10s        # Таймаут для сбора метрик
+
+# Правила для записи предварительно вычисленных выражений
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Настройки сбора метрик
+scrape_configs:
+  # 1. Сам Prometheus (встроенные метрики)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    honor_labels: true
+
+  # 2. Kafka Connect Exporter - САМОЕ ВАЖНОЕ!
+  - job_name: 'kafka-connect-exporter'
+    static_configs:
+      - targets: ['kafka-connect-exporter:8084']
+        labels:
+          service: 'kafka-connect'
+          component: 'exporter'
+          environment: 'production'
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    honor_labels: true  # Сохранять оригинальные метки
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
